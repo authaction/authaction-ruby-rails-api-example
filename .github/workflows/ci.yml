@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Check Rails boot
+        run: bundle exec rails runner "puts 'Boot OK'"
+        env:
+          RAILS_ENV: development
+          AUTHACTION_DOMAIN: example.authaction.com
+          AUTHACTION_AUDIENCE: https://example.com
+          SECRET_KEY_BASE: dummy-secret-for-ci

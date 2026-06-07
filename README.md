@@ -1,10 +1,10 @@
 # authaction-ruby-rails-api-example
 
-A Ruby on Rails API application demonstrating API authorization using [AuthAction](https://app.authaction.com/) with JWKS-based JWT validation.
+A Ruby on Rails API application demonstrating API authorization using [AuthAction](https://app.authaction.com/) with the `authaction-ruby-sdk`.
 
 ## Overview
 
-This application shows how to configure and handle authorization using AuthAction's access tokens in a Rails API-only app. It validates JSON Web Tokens (JWT) signed with RS256 by fetching public keys dynamically from AuthAction's JWKS endpoint, with automatic key-rotation handling.
+This application shows how to configure and handle authorization using AuthAction's access tokens in a Rails API-only app. It validates JSON Web Tokens (JWT) using the `authaction-ruby-sdk`, which handles JWKS fetching and RS256 validation automatically.
 
 ## Prerequisites
 
@@ -93,11 +93,9 @@ authaction-ruby-rails-api-example/
 ├── app/
 │   └── controllers/
 │       ├── concerns/
-│       │   └── jwt_authenticatable.rb   # Concern: token extraction + error handling
+│       │   └── jwt_authenticatable.rb   # Wraps AuthAction::Rails::JwtAuthenticatable
 │       ├── application_controller.rb    # Includes JwtAuthenticatable
 │       └── messages_controller.rb       # public + protected actions
-├── lib/
-│   └── jwt_validator.rb                 # JWKS fetching, caching, and JWT decode
 ├── config/
 │   ├── routes.rb
 │   └── initializers/
@@ -109,36 +107,23 @@ authaction-ruby-rails-api-example/
 
 ## Code Explanation
 
-### `lib/jwt_validator.rb` — JWT Validation
-
-Equivalent to `JwtStrategy` in the NestJS example.
-
-- **`jwks_loader`** — Returns a lambda that the `jwt` gem calls to retrieve
-  public keys. It caches the JWKS in `Rails.cache` for 1 hour. When the gem
-  detects a `kid` mismatch it calls the lambda again with
-  `kid_not_found: true`, which busts the cache and re-fetches — handling key
-  rotation automatically.
-
-- **`verify(token)`** — Decodes and validates the JWT via `JWT.decode` with:
-  - Algorithm: `RS256`
-  - Issuer: `https://{AUTHACTION_DOMAIN}` (`verify_iss: true`)
-  - Audience: `{AUTHACTION_AUDIENCE}` (`verify_aud: true`)
-
-  Unlike Laravel/PHP, the `jwt` gem enforces issuer and audience natively via
-  decode options — no manual checking required.
-
 ### `app/controllers/concerns/jwt_authenticatable.rb` — Auth Concern
 
-- **`authenticate_request!`** — Calls `JwtValidator.verify` and stores the
-  decoded payload in `@current_payload`. Renders a 401 JSON response on any
-  `JWT::DecodeError`.
-- Included into `ApplicationController` so all controllers inherit it.
+Includes `AuthAction::Rails::JwtAuthenticatable` from `authaction/rails` (part of `authaction-ruby-sdk`). This mixin provides an `authenticate_request!` method that extracts the Bearer token, validates it using the SDK (JWKS + RS256), stores the decoded payload in `@current_payload`, and renders a 401 JSON response on any validation failure.
+
+### `app/controllers/application_controller.rb` — Base Controller
+
+Includes `JwtAuthenticatable` so all controllers inherit the `authenticate_request!` method.
 
 ### `app/controllers/messages_controller.rb` — Controller
 
 - **`GET /public`** — No `before_action`, accessible without authentication.
 - **`GET /protected`** — `before_action :authenticate_request!` guards the
   action. The verified payload is available via `@current_payload`.
+
+### `config/initializers/authaction.rb` — Boot Validation
+
+Raises at startup if `AUTHACTION_DOMAIN` or `AUTHACTION_AUDIENCE` are missing from the environment.
 
 ## Common Issues
 
